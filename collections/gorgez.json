@@ -1,0 +1,59 @@
+{
+  "slug": "gorgez",
+  "name": "DropDed Gorgez",
+  "contract": "0x9c51a3cb5094b26aa1dcb380f3dc7e1a7c681c2d",
+  "chain": "ethereum",
+  "supply": 8888,
+  "curated": true,
+  "ready": true,
+  "dataSource": "opensea",
+  "rankSource": "opensea-openrarity",
+  "tokenNameFmt": "DropDed Gorgez #{id}",
+  "excludeTraitTypes": [
+    "1/1"
+  ],
+  "modules": {
+    "completion": true,
+    "sellKeep": true,
+    "market": true,
+    "holders": true,
+    "missing": true,
+    "wishlist": true,
+    "sets": true,
+    "twins": true
+  },
+  "burnEvent": {
+    "name": "Gate of Transcendence",
+    "emoji": "🔥",
+    "cost": 44,
+    "reward": "1 randomly-assigned Lord of Umbra (Wheel of Fate — you cannot choose which)",
+    "note": "Permanent. First come, first served. ~15 Lords available via the Gate; up to 10 more awarded through community events."
+  },
+  "data": "gorgez",
+  "branding": {
+    "emoji": "💀",
+    "name": "DropDed Gorgez",
+    "tagline": "Transcend all living beauty · ETH Mainnet",
+    "website": "https://dedgorgez.com/",
+    "twitter": "DedGorgez",
+    "discord": "",
+    "logo": "https://dedgorgez.com/Logo.4440b96f.png",
+    "banner": "",
+    "colors": {
+      "bg": "#0c0415",
+      "bg2": "#12071D",
+      "bg3": "#1c0d2e",
+      "card": "#180a28",
+      "border": "#3d2260",
+      "accent": "#c445e0",
+      "text": "#f2ebf9",
+      "muted": "#a091b5"
+    }
+  },
+  "donate": {
+    "eth": "0x60Dca57feAE49aCCBD08Fa2B8B8cf67C99F34305",
+    "stripe": "https://buy.stripe.com/fZucN7fEl3ct3Z80kp93y00",
+    "hidden": true
+  },
+  "offersFree": true
+}

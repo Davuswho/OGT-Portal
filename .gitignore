@@ -1,0 +1,14 @@
+.env
+.env.local
+.env.*.local
+*.opensea.env
+node_modules/
+.vercel/
+*.log
+.DS_Store
+
+.vercel
+
+# never commit env backups or variants (they contain live API keys)
+.env.*
+!.env.example

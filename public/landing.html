@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>OGT Portal — Los Gorgez & OGTriple</title>
+<style>
+:root{--bg:#0b0608;--bg2:#140a0c;--card:#1a0d10;--border:#43212a;--accent:#c4303a;--text:#f2e9e4;--muted:#b09a97;--bone:#e8dcc8;--good:#8fbf8f}
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;min-height:100vh}
+.wrap{max-width:1040px;margin:0 auto;padding:28px 20px 60px}
+header.top{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
+.logo{font-size:1.7rem;font-weight:800;color:var(--accent);letter-spacing:-.5px}
+.logo .k{color:var(--text)}
+.tag{color:var(--muted);font-size:.9rem}
+.spacer{margin-left:auto}
+.btn{background:var(--accent);color:#08101f;border:none;padding:11px 18px;border-radius:10px;font-size:.92rem;font-weight:700;cursor:pointer;transition:.15s}
+.btn:hover{opacity:.9}
+.btn.ghost{background:transparent;color:var(--accent);border:1px solid var(--border)}
+.btn.ghost:hover{border-color:var(--accent)}
+.connect-state{font-size:.82rem;color:var(--good);font-family:monospace}
+.hero{margin:22px 0 26px}
+.hero h1{font-size:1.9rem;line-height:1.2;margin-bottom:8px}
+.hero p{color:var(--muted);max-width:640px;line-height:1.6}
+.add-row{display:flex;gap:8px;margin:18px 0 28px;flex-wrap:wrap}
+.add-row input{flex:1;min-width:240px;background:var(--card);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:10px;font-size:.92rem}
+.add-row input:focus{outline:none;border-color:var(--accent)}
+.sec-lbl{font-size:.72rem;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);margin:6px 0 12px;font-weight:700}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:14px}
+.col-card{background:var(--card);border:1px solid var(--border);border-radius:14px;padding:18px;cursor:pointer;transition:.18s;position:relative;overflow:hidden}
+.col-card:hover{transform:translateY(-2px);border-color:var(--cAccent,var(--accent));box-shadow:0 8px 30px rgba(0,0,0,.4)}
+.col-card .bar{position:absolute;top:0;left:0;right:0;height:4px;background:var(--cAccent,var(--accent))}
+.col-emoji{font-size:2rem;margin-bottom:8px}
+.col-name{font-size:1.15rem;font-weight:800;margin-bottom:3px}
+.col-meta{color:var(--muted);font-size:.8rem;line-height:1.5}
+.col-go{margin-top:12px;font-size:.82rem;color:var(--cAccent,var(--accent));font-weight:700}
+.footer{margin-top:46px;padding-top:20px;border-top:1px solid var(--border);display:flex;gap:14px;flex-wrap:wrap;align-items:center;color:var(--muted);font-size:.82rem}
+.footer a{color:var(--text);text-decoration:none}
+.footer a:hover{color:var(--accent)}
+.modal-bg{display:none;position:fixed;inset:0;background:rgba(0,0,0,.78);z-index:50;align-items:center;justify-content:center;padding:16px}
+.modal-bg.open{display:flex}
+.modal{background:var(--card);border:1px solid var(--accent);border-radius:16px;padding:24px;width:100%;max-width:460px}
+.modal h2{font-size:1.25rem;margin-bottom:4px}
+.modal .sub{color:var(--muted);font-size:.85rem;margin-bottom:16px}
+.modal input{width:100%;background:var(--bg2);border:1px solid var(--border);color:var(--text);padding:12px 14px;border-radius:9px;font-size:.9rem;margin-bottom:10px;font-family:monospace}
+.modal input:focus{outline:none;border-color:var(--accent)}
+.mw-row{display:flex;gap:8px;margin-bottom:8px}
+.mw-row input{margin-bottom:0}
+.mw-row .alias{flex:0 0 110px;font-family:inherit}
+.mw-row .rm{flex:0 0 auto;background:none;border:1px solid var(--border);color:var(--muted);border-radius:8px;padding:0 12px;cursor:pointer}
+.mw-row .rm:hover{border-color:#ff6b6b;color:#ff6b6b}
+.addmore{background:none;border:1px dashed var(--border);color:var(--accent);border-radius:9px;padding:9px;width:100%;cursor:pointer;font-size:.84rem;margin-bottom:10px}
+.row{display:flex;gap:8px;margin-top:6px}
+.row .btn{flex:1}
+.toggle{display:inline-block;margin:2px 0 14px;font-size:.8rem;color:var(--accent);cursor:pointer;user-select:none}
+.err{color:#ff6b6b;font-size:.8rem;margin:4px 0 8px;display:none}
+.muted-link{color:var(--muted);font-size:.82rem;text-align:center;display:block;margin-top:10px;cursor:pointer}
+.muted-link:hover{color:var(--text)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="logo" style="display:flex;align-items:center;gap:10px">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><defs><linearGradient id="lgm" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6ea8fe"/><stop offset="1" stop-color="#a06bfe"/></linearGradient></defs><rect x="1" y="1" width="32" height="32" rx="8" fill="#141a28" stroke="url(#lgm)" stroke-width="2"/><rect x="7" y="7" width="20" height="6" rx="2" fill="url(#lgm)"/><rect x="14" y="15" width="6" height="12" rx="2" fill="url(#lgm)"/><rect x="7" y="15" width="5" height="5" rx="1.5" fill="#6ea8fe" opacity=".45"/><rect x="22" y="15" width="5" height="5" rx="1.5" fill="#a06bfe" opacity=".45"/><rect x="22" y="22" width="5" height="5" rx="1.5" fill="#f0c245"/></svg>
+      OGT <span class="k">Portal</span>
+    </div>
+    <div class="tag">Los Gorgez &amp; OGTriple · holdings, traits &amp; market</div>
+    <div class="spacer"></div>
+    <span class="connect-state" id="connState"></span>
+    <button class="btn ghost" id="connectBtn" onclick="toggleConnect()">Connect Wallet</button>
+  </header>
+
+  <div class="hero">
+    <svg viewBox="0 0 980 200" style="width:100%;height:auto;display:block;margin-bottom:20px" role="img" aria-label="OGT Portal — Los Gorgez & OGTriple">
+      <defs>
+        <linearGradient id="hbg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#0d1220"/><stop offset=".55" stop-color="#131a30"/><stop offset="1" stop-color="#1a1430"/></linearGradient>
+        <linearGradient id="hword" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#6ea8fe"/><stop offset=".6" stop-color="#8f7bfe"/><stop offset="1" stop-color="#c06bfe"/></linearGradient>
+        <linearGradient id="htile" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#4a5fae"/><stop offset="1" stop-color="#2b3a5e"/></linearGradient>
+        <filter id="hglow" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+        <pattern id="hgrid" width="26" height="26" patternUnits="userSpaceOnUse"><path d="M26 0H0V26" fill="none" stroke="#6ea8fe" stroke-opacity=".06"/></pattern>
+      </defs>
+      <rect x="0" y="0" width="980" height="200" rx="18" fill="url(#hbg)"/>
+      <rect x="0" y="0" width="980" height="200" rx="18" fill="url(#hgrid)"/>
+      <!-- orbit of collections around the titan -->
+      <ellipse cx="150" cy="102" rx="128" ry="86" fill="none" stroke="#6ea8fe" stroke-opacity=".16"/>
+      <circle cx="150" cy="16"  r="5" fill="#7fe070"/><circle cx="262" cy="60" r="5" fill="#c445e0"/>
+      <circle cx="262" cy="146" r="5" fill="#ff6b6b"/><circle cx="150" cy="188" r="5" fill="#5aa7ff"/>
+      <circle cx="38"  cy="146" r="5" fill="#ffb86b"/><circle cx="38"  cy="60"  r="5" fill="#e6e9f0"/>
+      <!-- the titan — a colossus assembled from trait tiles -->
+      <g>
+        <rect x="139" y="14" width="22" height="18" rx="4" fill="#7e5bd6"/>
+        <rect x="113" y="36" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="139" y="36" width="22" height="22" rx="4" fill="#38508a"/><rect x="165" y="36" width="22" height="22" rx="4" fill="url(#htile)"/>
+        <rect x="113" y="62" width="22" height="22" rx="4" fill="#38508a"/><rect x="139" y="62" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="165" y="62" width="22" height="22" rx="4" fill="#38508a"/>
+        <rect x="111" y="68" width="78" height="9" rx="4.5" fill="#7fdcfe" filter="url(#hglow)"/>
+        <rect x="113" y="88" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="139" y="88" width="22" height="22" rx="4" fill="#38508a"/><rect x="165" y="88" width="22" height="22" rx="4" fill="url(#htile)"/>
+        <rect x="61"  y="114" width="22" height="22" rx="4" fill="#2b3a5e"/><rect x="87" y="114" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="113" y="114" width="22" height="22" rx="4" fill="#38508a"/><rect x="139" y="114" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="165" y="114" width="22" height="22" rx="4" fill="#38508a"/><rect x="191" y="114" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="217" y="114" width="22" height="22" rx="4" fill="#2b3a5e"/>
+        <rect x="87"  y="140" width="22" height="22" rx="4" fill="#38508a"/><rect x="113" y="140" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="139" y="140" width="22" height="22" rx="4" fill="#f0c245" filter="url(#hglow)"/><rect x="165" y="140" width="22" height="22" rx="4" fill="url(#htile)"/><rect x="191" y="140" width="22" height="22" rx="4" fill="#38508a"/>
+        <rect x="113" y="166" width="22" height="22" rx="4" fill="#2b3a5e"/><rect x="139" y="166" width="22" height="22" rx="4" fill="#38508a"/><rect x="165" y="166" width="22" height="22" rx="4" fill="#2b3a5e"/>
+      </g>
+      <!-- wordmark -->
+      <text x="330" y="112" font-family="'Segoe UI',system-ui,sans-serif" font-size="76" font-weight="900" letter-spacing="2" fill="url(#hword)">OGT</text>
+      <text x="500" y="112" font-family="'Segoe UI',system-ui,sans-serif" font-size="76" font-weight="900" letter-spacing="2" fill="#e8dcc8" opacity=".92">PORTAL</text>
+      <rect x="334" y="128" width="404" height="4" rx="2" fill="url(#hword)" opacity=".7"/>
+      <text x="334" y="160" font-family="'Segoe UI',system-ui,sans-serif" font-size="19" fill="#8a93a6">Every collection · every trait · every wallet — one tracker.</text>
+    </svg>
+    <h1>Track any NFT collection — your wallet, your traits.</h1>
+    <p>Connect a wallet (or paste an address), pick a collection, and see your holdings, missing traits,
+       floors, and the cheapest path to 100%. Each collection is auto-branded from its OpenSea page.</p>
+  </div>
+
+  <div class="sec-lbl">Add any collection</div>
+  <div class="add-row">
+    <input id="addSlug" placeholder="Paste an OpenSea collection link (or its slug)" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter')addCollection()">
+    <button class="btn" onclick="addCollection()">Open →</button>
+  </div>
+
+  <div class="sec-lbl">Featured collections</div>
+  <div class="grid" id="grid"></div>
+
+  <div class="footer">
+    <div style="width:100%;font-weight:700;color:var(--text)">Built by a DDG holder. Not an official OGTriple product.</div>
+    <a href="https://x.com/davuswho" target="_blank" rel="noopener">Developed by @Davuswho 𝕏</a>
+    <span class="spacer"></span>
+    <span>Non-custodial · your wallet is never stored server-side</span>
+    <div style="flex-basis:100%;color:var(--muted);font-size:.72rem;margin-top:10px;line-height:1.55">
+      Unofficial community tool — not affiliated with, endorsed by, or sponsored by any collection or marketplace shown.
+      Data sourced from OpenSea and provided &ldquo;as-is&rdquo; with no guarantee of accuracy or uptime. Nothing here is financial advice.
+    </div>
+  </div>
+</div>
+
+<!-- wallet chooser modal -->
+<div class="modal-bg" id="walletPicker" onclick="if(event.target===this)closeWalletPicker()">
+  <div class="modal" style="max-width:420px">
+    <h2>Connect a wallet</h2>
+    <div class="sub">Pick which wallet extension to use — “Detected” means it’s installed in this browser.</div>
+    <div id="walletList" style="margin-top:14px"></div>
+    <span class="muted-link" onclick="closeWalletPicker()">Cancel</span>
+  </div>
+</div>
+
+<!-- WalletConnect QR / mobile-app-open modal -->
+<div class="modal-bg" id="wcModal" onclick="if(event.target===this)cancelWalletConnect()">
+  <div class="modal" style="max-width:380px;text-align:center">
+    <h2>📱 Connect with your wallet app</h2>
+    <div class="sub" id="wcStatus">Generating a secure pairing code…</div>
+    <div id="wcQrWrap" style="margin:16px 0"></div>
+    <a id="wcOpenAppBtn" class="btn" style="display:none;text-decoration:none;margin-bottom:10px" href="#">Open in wallet app →</a>
+    <div class="sub" style="font-size:.8rem">Scan with any WalletConnect-compatible wallet (MetaMask, Trust, Rainbow, Coinbase…), or tap the button above on this same phone.</div>
+    <span class="muted-link" onclick="cancelWalletConnect()">Cancel</span>
+  </div>
+</div>
+
+<!-- wallet entry modal -->
+<div class="modal-bg" id="walletModal" onclick="if(event.target===this)closeModal()">
+  <div class="modal">
+    <h2 id="mTitle">Track a collection</h2>
+    <div class="sub" id="mSub">Enter your wallet, or browse without one.</div>
+    <div class="err" id="mErr">Enter a valid address (0x + 40 hex).</div>
+    <div id="single">
+      <input id="oneAddr" placeholder="0x… your wallet address" spellcheck="false" autocomplete="off" onkeydown="if(event.key==='Enter')goWallet()">
+    </div>
+    <div id="multi" style="display:none">
+      <div id="mwRows"></div>
+      <button class="addmore" onclick="addMwRow()">+ add another wallet</button>
+    </div>
+    <span class="toggle" id="mwToggle" onclick="toggleMulti()">🗂 Track multiple wallets</span>
+    <div class="row">
+      <button class="btn" onclick="goWallet()">View dashboard →</button>
+    </div>
+    <span class="muted-link" onclick="browseOnly()">Browse the collection without a wallet</span>
+  </div>
+</div>
+
+<script>
+var COLLECTIONS = __COLLECTIONS__;
+var OWNER = __OWNER__;
+var WC_PROJECT_ID = __WC_PROJECT_ID__;
+var connected = null;       // connected wallet address (from injected provider)
+var activeSlug = null;
+var multiMode = false, mwCount = 0;
+
+function shortAddr(a){ return a.slice(0,6)+'…'+a.slice(-4); }
+function isAddr(a){ return /^0x[0-9a-fA-F]{40}$/.test(a||''); }
+
+// ---- render collection cards ----
+(function render(){
+  var g = document.getElementById('grid');
+  g.innerHTML = COLLECTIONS.map(function(c){
+    var ac = (c.colors && c.colors.accent) ? c.colors.accent : '#6ea8fe';
+    var sup = c.supply ? Number(c.supply).toLocaleString('en-US')+' items' : 'live';
+    var ready = c.ready !== false;
+    var style = '--cAccent:'+ac+(ready?'':';opacity:.45;cursor:default');
+    return '<div class="col-card" style="'+style+'"'+(ready?' onclick="openModal(\''+c.slug+'\')"':'')+'>'
+      + '<div class="bar"></div>'
+      + '<div class="col-emoji">'+(c.emoji||'🎨')+'</div>'
+      + '<div class="col-name">'+esc(c.name)+'</div>'
+      + '<div class="col-meta">'+esc(c.tagline||sup)+'</div>'
+      + '<div class="col-go">'+(ready?'Open tracker →':'⏳ Coming soon')+'</div>'
+      + '</div>';
+  }).join('');
+})();
+function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c];});}
+
+// ---- connect wallet — EIP-6963 multi-wallet chooser ----
+// With several extensions installed they fight over window.ethereum (Trust often wins), so instead of
+// trusting window.ethereum we use EIP-6963: every wallet announces itself and the user explicitly
+// picks which one to connect. Falls back to window.ethereum only if no wallet announces.
+var eipProviders=[], selectedProvider=null;
+function _addProvider(d){ if(d&&d.info&&d.provider&&!eipProviders.some(function(p){return p.info.uuid===d.info.uuid;})) eipProviders.push({info:d.info,provider:d.provider}); }
+window.addEventListener('eip6963:announceProvider',function(e){ _addProvider(e.detail); });
+try{ window.dispatchEvent(new Event('eip6963:requestProvider')); }catch(e){}
+
+// Popular wallets surfaced by name even when not installed (with an install link).
+var KNOWN_WALLETS=[
+  {name:'MetaMask',        rdns:'io.metamask',         match:'metamask', url:'https://metamask.io/download/'},
+  {name:'Coinbase Wallet', rdns:'com.coinbase.wallet', match:'coinbase', url:'https://www.coinbase.com/wallet/downloads'},
+  {name:'Trust Wallet',    rdns:'com.trustwallet.app', match:'trust',    url:'https://trustwallet.com/download'},
+  {name:'Rabby',           rdns:'io.rabby',            match:'rabby',    url:'https://rabby.io/'},
+  {name:'OKX Wallet',      rdns:'com.okex.wallet',     match:'okx',      url:'https://www.okx.com/web3'},
+  {name:'Phantom',         rdns:'app.phantom',         match:'phantom',  url:'https://phantom.app/download'}
+];
+function findProvider(w){ return eipProviders.filter(function(p){ var r=(p.info.rdns||'').toLowerCase(), n=(p.info.name||'').toLowerCase(); return r===w.rdns || n.indexOf(w.match)>=0; })[0]||null; }
+function connectWallet(){ openWalletPicker(); }
+function walletIcon(p){ return (p&&p.info.icon)?'<img src="'+p.info.icon+'" alt="" style="width:28px;height:28px;border-radius:7px;flex-shrink:0">':'<span style="font-size:1.5rem;width:28px;text-align:center;flex-shrink:0">👛</span>'; }
+function _dot(){ return '<span style="font-size:.72rem;font-weight:700;color:#12c07a;background:rgba(18,192,122,.13);padding:3px 9px;border-radius:999px">Detected</span>'; }
+function _hoverOn(el){ el.style.borderColor='var(--accent)'; }
+function openWalletPicker(){
+  try{ window.dispatchEvent(new Event('eip6963:requestProvider')); }catch(e){}
+  var rows=[], used={};
+  var rs='display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:11px;margin-bottom:9px;text-decoration:none;color:inherit';
+  KNOWN_WALLETS.forEach(function(w){
+    var p=findProvider(w);
+    if(p){ used[p.info.uuid]=1;
+      rows.push('<div onclick="doConnectByUuid(\''+p.info.uuid+'\')" style="'+rs+';cursor:pointer" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'+walletIcon(p)+'<span style="font-weight:700;flex:1">'+esc(w.name)+'</span>'+_dot()+'</div>');
+    } else {
+      rows.push('<a href="'+w.url+'" target="_blank" rel="noopener noreferrer" style="'+rs+';opacity:.6" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=.6"><span style="font-size:1.4rem;width:28px;text-align:center;flex-shrink:0">🧩</span><span style="font-weight:700;flex:1">'+esc(w.name)+'</span><span style="font-size:.72rem;color:var(--muted)">Install ↗</span></a>');
+    }
+  });
+  eipProviders.forEach(function(p){ if(used[p.info.uuid]) return;
+    rows.push('<div onclick="doConnectByUuid(\''+p.info.uuid+'\')" style="'+rs+';cursor:pointer" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'">'+walletIcon(p)+'<span style="font-weight:700;flex:1">'+esc(p.info.name)+'</span>'+_dot()+'</div>');
+  });
+  // Extensions only exist on desktop browsers — phones have no equivalent, so this is the one
+  // option that actually works on mobile (bridges to a wallet APP via QR / deep link instead).
+  if(WC_PROJECT_ID){
+    rows.push('<div onclick="connectWalletConnect()" style="'+rs+';cursor:pointer;margin-top:4px" onmouseover="this.style.borderColor=\'var(--accent)\'" onmouseout="this.style.borderColor=\'var(--border)\'"><span style="font-size:1.4rem;width:28px;text-align:center;flex-shrink:0">📱</span><span style="font-weight:700;flex:1">WalletConnect<div style="font-weight:400;font-size:.76rem;color:var(--muted)">Scan with phone, or open a wallet app</div></span></div>');
+  }
+  document.getElementById('walletList').innerHTML=rows.join('');
+  document.getElementById('walletPicker').classList.add('open');
+}
+
+// ---- WalletConnect (mobile-app bridge via QR code / deep link) ----
+// Extensions don't exist on phones, so this is a separate path: bridges to a wallet APP over
+// WalletConnect's relay instead of an injected provider. Scripts are large (WC core + QR
+// renderer), so load them lazily on first use rather than on every landing-page visit.
+var wcScriptsPromise = null, wcProvider = null;
+function loadScript(src){
+  return new Promise(function(resolve,reject){
+    var s=document.createElement('script'); s.src=src;
+    s.onload=function(){resolve();}; s.onerror=function(){reject(new Error('failed to load '+src));};
+    document.head.appendChild(s);
+  });
+}
+function loadWcScripts(){
+  if(!wcScriptsPromise) wcScriptsPromise = Promise.all([loadScript('/vendor/wc-ethereum-provider.bundle.js'), loadScript('/vendor/qrcode.bundle.js')]);
+  return wcScriptsPromise;
+}
+function isMobileUA(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||''); }
+async function connectWalletConnect(){
+  closeWalletPicker();
+  document.getElementById('wcStatus').textContent = 'Loading…';
+  document.getElementById('wcQrWrap').innerHTML = '';
+  document.getElementById('wcOpenAppBtn').style.display = 'none';
+  document.getElementById('wcModal').classList.add('open');
+  try{
+    await loadWcScripts();
+    wcProvider = await window.WCEthereumProvider.init({
+      projectId: WC_PROJECT_ID, chains: [1], showQrModal: false,
+      metadata: { name: 'OGT Portal', description: 'DDG and OGTriple collection tracker', url: location.origin, icons: [] }
+    });
+    wcProvider.on('display_uri', function(uri){
+      document.getElementById('wcStatus').textContent = 'Scan with your wallet app\'s QR scanner:';
+      window.QRCodeLib.toDataURL(uri, {width:220,margin:1}).then(function(dataUrl){
+        document.getElementById('wcQrWrap').innerHTML = '<img src="'+dataUrl+'" width="220" height="220" alt="WalletConnect QR code" style="border-radius:10px">';
+      });
+      if(isMobileUA()){
+        var btn=document.getElementById('wcOpenAppBtn');
+        btn.href = uri; btn.style.display='inline-block';
+      }
+    });
+    await wcProvider.connect();
+    var accts = wcProvider.accounts || (await wcProvider.request({method:'eth_accounts'}));
+    if(accts && accts[0]){ connected=accts[0]; selectedProvider=wcProvider; showConnected(); closeWcModal(); }
+    else { document.getElementById('wcStatus').textContent = 'No account returned — try again.'; }
+  }catch(e){
+    document.getElementById('wcStatus').textContent = (e && e.message) ? e.message : 'Connection failed or was cancelled.';
+  }
+}
+function closeWcModal(){ var m=document.getElementById('wcModal'); if(m) m.classList.remove('open'); }
+function cancelWalletConnect(){ closeWcModal(); if(wcProvider){ try{ wcProvider.disconnect(); }catch(e){} wcProvider=null; } }
+function closeWalletPicker(){ var m=document.getElementById('walletPicker'); if(m)m.classList.remove('open'); }
+function doConnectByUuid(u){ var p=eipProviders.filter(function(x){return x.info.uuid===u;})[0]; if(p) doConnect(p.provider,p.info.name); }
+async function doConnect(provider,name){
+  try{
+    try{ await provider.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]}); }catch(pe){ if(pe&&pe.code===4001) return; }
+    var accts=await provider.request({method:'eth_requestAccounts'});
+    if(accts&&accts[0]){ connected=accts[0]; selectedProvider=provider; showConnected(); closeWalletPicker(); }
+  }catch(e){ /* rejected */ }
+}
+function disconnectWallet(){ connected=null; try{ localStorage.removeItem('rk_wallet'); }catch(e){} showConnected(); }
+function toggleConnect(){ if(connected){ disconnectWallet(); } else { connectWallet(); } }
+function showConnected(){
+  var st=document.getElementById('connState'), btn=document.getElementById('connectBtn');
+  if(connected){ st.textContent='● '+shortAddr(connected)+' connected'; btn.textContent='Disconnect'; btn.title='Disconnect / switch wallet'; try{ localStorage.setItem('rk_wallet', connected); }catch(e){} }
+  else { st.textContent=''; btn.textContent='Connect Wallet'; btn.title='Connect a wallet'; }
+}
+(function restore(){ try{ var w=localStorage.getItem('rk_wallet'); if(isAddr(w)){ connected=w; showConnected(); } }catch(e){} })();
+var siweAddr=null;
+(async function detectSiwe(){ try{ var me=await (await fetch('/api/siwe/me')).json(); if(me&&me.address){ siweAddr=me.address; var st=document.getElementById('connState'); if(st) st.textContent='● '+shortAddr(siweAddr)+' signed in'; } }catch(e){} })();
+function siweLogout(){ fetch('/api/siwe/logout',{method:'POST'}).then(function(){ siweAddr=null; location.reload(); }); }
+
+// ---- wallet modal ----
+function openModal(slug){
+  activeSlug = slug;
+  if(siweAddr){ location.href='/c/'+slug; return; }   // signed in → server renders your linked wallet set
+  // Already connected → skip the prompt and go straight to the dashboard with that wallet.
+  if(connected && isAddr(connected)){ location.href='/c/'+slug+'/'+connected; return; }
+  var c = COLLECTIONS.filter(function(x){return x.slug===slug;})[0] || {name:slug};
+  document.getElementById('mTitle').textContent = (c.emoji?c.emoji+' ':'')+c.name;
+  document.getElementById('mErr').style.display='none';
+  document.getElementById('oneAddr').value = connected || '';
+  document.getElementById('walletModal').classList.add('open');
+  setTimeout(function(){ document.getElementById('oneAddr').focus(); },50);
+}
+function closeModal(){ document.getElementById('walletModal').classList.remove('open'); }
+function toggleMulti(){
+  multiMode = !multiMode;
+  document.getElementById('single').style.display = multiMode?'none':'block';
+  document.getElementById('multi').style.display = multiMode?'block':'none';
+  document.getElementById('mwToggle').textContent = multiMode?'← Single wallet':'🗂 Track multiple wallets';
+  if(multiMode && !document.querySelectorAll('#mwRows .mw-row').length){ addMwRow(); addMwRow();
+    var f=document.querySelector('#mwRows .addr'); if(f && (connected||document.getElementById('oneAddr').value)) f.value = connected||document.getElementById('oneAddr').value; }
+}
+function addMwRow(){
+  if(mwCount>=6) return; mwCount++;
+  var d=document.createElement('div'); d.className='mw-row';
+  d.innerHTML='<input class="addr" placeholder="0x… wallet" spellcheck="false" autocomplete="off">'
+    +'<input class="alias" placeholder="Nickname" maxlength="20">'
+    +'<button class="rm" onclick="this.parentNode.remove();mwCount--">✕</button>';
+  document.getElementById('mwRows').appendChild(d);
+}
+function goWallet(){
+  var err=document.getElementById('mErr'); err.style.display='none';
+  var entries=[];
+  if(!multiMode){
+    var w=document.getElementById('oneAddr').value.trim();
+    if(!isAddr(w)){ err.style.display='block'; return; }
+    entries.push(w);
+  }else{
+    var rows=document.querySelectorAll('#mwRows .mw-row'), bad=false;
+    rows.forEach(function(r){
+      var a=r.querySelector('.addr').value.trim();
+      var al=r.querySelector('.alias').value.trim().replace(/[,:]/g,'');
+      if(!a) return;
+      if(!isAddr(a)){ bad=true; return; }
+      entries.push(a+(al?':'+encodeURIComponent(al):''));
+    });
+    if(bad||!entries.length){ err.textContent='Please check the addresses (0x + 40 hex).'; err.style.display='block'; return; }
+  }
+  location.href='/c/'+activeSlug+'/'+entries.join(',');
+}
+function browseOnly(){ location.href='/c/'+activeSlug; }
+function addCollection(){
+  var raw=document.getElementById('addSlug').value.trim();
+  if(!raw) return;
+  var s=raw;
+  var m=raw.match(/opensea\.io\/(?:collection|assets\/[a-z0-9]+)\/([a-z0-9_\-]+)/i); // pull slug out of a pasted URL
+  if(m) s=m[1];
+  s=s.toLowerCase().replace(/[^a-z0-9_\-]/g,'');
+  if(!s) return;
+  location.href='/c/'+s+(connected&&isAddr(connected)?'/'+connected:'');
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+{
+  "name": "nft-trait-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Multi-collection NFT trait tracker platform (RareKit) — connect wallet, pick/add any OpenSea collection, auto-branded.",
+  "scripts": {
+    "dev": "node scripts/local-server.js",
+    "sync": "node scripts/sync.js",
+    "bake": "node scripts/bake.js"
+  },
+  "dependencies": {
+    "@walletconnect/ethereum-provider": "^2.23.10",
+    "ethers": "^6.13.4",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.1"
+  }
+}

@@ -1,0 +1,46 @@
+{
+  "slug": "ogtcertification",
+  "name": "OGT Certification",
+  "contract": "0x0c212fdb58d31e36039efa2c85dfb0482af8f2ee",
+  "chain": "ethereum",
+  "supply": 1000,
+  "curated": true,
+  "ready": false,
+  "dataSource": "opensea",
+  "rankSource": null,
+  "tokenNameFmt": "OGT Certification #{id}",
+  "modules": {
+    "completion": false,
+    "sellKeep": false,
+    "missing": false,
+    "wishlist": false,
+    "sets": false,
+    "twins": false,
+    "market": true,
+    "holders": true
+  },
+  "data": "ogtcertification",
+  "branding": {
+    "emoji": "🏅",
+    "name": "OGT Certification",
+    "tagline": "OGTriple Media · 1,000 certifications · ETH Mainnet",
+    "website": "https://www.ogtriple.com/",
+    "twitter": "OGTripleMedia",
+    "discord": "",
+    "logo": "",
+    "banner": "",
+    "colors": {
+      "bg": "#0b0608",
+      "bg2": "#140a0c",
+      "bg3": "#1e0e11",
+      "card": "#1a0c0f",
+      "border": "#4a1f24",
+      "accent": "#c4303a",
+      "text": "#f6ece9",
+      "muted": "#b09a97"
+    }
+  },
+  "indexed": 901,
+  "noRarity": true,
+  "note": "Each OGT Certification carries exactly one trait, a unique Certification Pass Number, so every value appears once and no rarity ordering exists. Rarity, completion, duplicate and trait-safety views are switched off deliberately: running them would manufacture rankings with no meaning. Market and holder views stay on because those are real. On-chain supply is 1000 (ids 1-1000, none burned); 901 are indexed with metadata."
+}

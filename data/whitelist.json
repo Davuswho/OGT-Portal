@@ -1,0 +1,6 @@
+{
+  "_comment": "Supporter / donor wallets that unlock gated features (e.g. Offer Queue). Add a wallet by putting its address (lowercase) in this list, OR set the DONOR_WALLETS env var (comma-separated). The OWNER_WALLET always has access. After editing, redeploy.",
+  "donors": [
+    "0x2da40ce78682262d8024c76f614490c73b174340"
+  ]
+}

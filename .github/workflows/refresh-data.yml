@@ -1,0 +1,112 @@
+# Refreshes Titan's collection data in the cloud so the pipeline does not depend on
+# any one machine. Market/floor data refreshes on a schedule; the heavier contract-direct
+# bake is manual-only, because DDG's tokenURI host rate-limits bulk fetches and a nightly
+# bake would fail noisily rather than usefully.
+name: Refresh collection data
+
+on:
+  schedule:
+    # 06:17 UTC daily. Off-the-hour on purpose: GitHub queues cron spikes at :00.
+    - cron: '17 6 * * *'
+  workflow_dispatch:
+    inputs:
+      bake_slug:
+        description: 'Optional: full contract-direct bake for this slug (gorgez or ogtcertification). Blank = market refresh only.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+concurrency:
+  group: refresh-data
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      OPENSEA_KEY: ${{ secrets.OPENSEA_KEY }}
+      ALCHEMY_KEY: ${{ secrets.ALCHEMY_KEY }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify secrets are present
+        run: |
+          test -n "$OPENSEA_KEY" || { echo "::error::OPENSEA_KEY repository secret is not set"; exit 1; }
+          test -n "$ALCHEMY_KEY" || { echo "::error::ALCHEMY_KEY repository secret is not set"; exit 1; }
+          echo "secrets present (OpenSea ${#OPENSEA_KEY} chars, Alchemy ${#ALCHEMY_KEY} chars)"
+
+      - name: Refresh market and floor data
+        run: |
+          fail=0
+          for slug in gorgez ogtcertification; do
+            echo "::group::$slug"
+            if node scripts/refresh-market.js "$slug"; then
+              echo "ok"
+            else
+              # refresh-market.js exits non-zero on its own safety aborts (e.g. zero usable
+              # listings). That leaves the existing file intact, which is the correct outcome —
+              # so warn and keep going rather than failing the whole run.
+              echo "::warning::market refresh failed for $slug (existing data left untouched)"
+              fail=$((fail+1))
+            fi
+            echo "::endgroup::"
+          done
+          echo "collections with failures: $fail"
+
+      - name: Full contract-direct bake (manual runs only)
+        if: ${{ github.event.inputs.bake_slug != '' }}
+        run: |
+          set -e
+          slug='${{ github.event.inputs.bake_slug }}'
+          echo "baking $slug from the contract"
+          node scripts/bake-onchain.js "$slug"
+          if [ "$slug" = "gorgez" ]; then
+            echo "regenerating derived sets"
+            node scripts/gen-gorgez-sets.js | tee sets.log
+            if grep -q 'PHANTOM VALUES' sets.log; then
+              echo "::error::gen-gorgez-sets found phantom trait values — refusing to commit"
+              exit 1
+            fi
+            rm -f sets.log
+          fi
+
+      - name: Commit and push if data changed
+        run: |
+          # Stage data/ only. Never `git add -A` — that could sweep up untracked local files.
+          if [ -z "$(git status --porcelain data/)" ]; then
+            echo "no data changes — nothing to commit"
+            exit 0
+          fi
+          git config user.name 'titan-data-bot'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data/
+          git commit -m "data: automated refresh $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push
+          echo "pushed — Vercel will redeploy automatically"
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### Titan data refresh"
+            echo ""
+            echo "- trigger: \`${{ github.event_name }}\`"
+            echo "- bake requested: \`${{ github.event.inputs.bake_slug || 'none (market refresh only)' }}\`"
+            echo "- changed files:"
+            echo ""
+            echo '```'
+            git status --porcelain data/ || echo "(clean)"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"

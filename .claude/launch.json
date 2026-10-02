@@ -1,0 +1,11 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "nft-master",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["scripts/local-server.js"],
+      "port": 8780
+    }
+  ]
+}

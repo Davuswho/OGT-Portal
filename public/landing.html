@@ -188,13 +188,13 @@ function isAddr(a){ return /^0x[0-9a-fA-F]{40}$/.test(a||''); }
 (function render(){
   var g = document.getElementById('grid');
   g.innerHTML = COLLECTIONS.map(function(c){
-    var ac = (c.colors && c.colors.accent) ? c.colors.accent : '#6ea8fe';
+    var ac = (c.colors && /^#[0-9a-f]{3,8}$/i.test(c.colors.accent||'')) ? c.colors.accent : '#6ea8fe';
     var sup = c.supply ? Number(c.supply).toLocaleString('en-US')+' items' : 'live';
     var ready = c.ready !== false;
     var style = '--cAccent:'+ac+(ready?'':';opacity:.45;cursor:default');
     return '<div class="col-card" style="'+style+'"'+(ready?' onclick="openModal(\''+c.slug+'\')"':'')+'>'
       + '<div class="bar"></div>'
-      + '<div class="col-emoji">'+(c.emoji||'🎨')+'</div>'
+      + '<div class="col-emoji">'+esc(c.emoji||'🎨')+'</div>'
       + '<div class="col-name">'+esc(c.name)+'</div>'
       + '<div class="col-meta">'+esc(c.tagline||sup)+'</div>'
       + '<div class="col-go">'+(ready?'Open tracker →':'⏳ Coming soon')+'</div>'
@@ -207,8 +207,9 @@ function esc(s){return String(s==null?'':s).replace(/[&<>"]/g,function(c){return
 // With several extensions installed they fight over window.ethereum (Trust often wins), so instead of
 // trusting window.ethereum we use EIP-6963: every wallet announces itself and the user explicitly
 // picks which one to connect. Falls back to window.ethereum only if no wallet announces.
-var eipProviders=[], selectedProvider=null;
-function _addProvider(d){ if(d&&d.info&&d.provider&&!eipProviders.some(function(p){return p.info.uuid===d.info.uuid;})) eipProviders.push({info:d.info,provider:d.provider}); }
+var eipProviders=[], selectedProvider=null, injectedAttempt=0;
+window.addEventListener('pagehide',function(){injectedAttempt++;cancelWalletConnect();});
+function _addProvider(d){ if(d&&d.info&&/^[a-zA-Z0-9-]{1,80}$/.test(d.info.uuid||'')&&typeof d.provider?.request==='function'&&!eipProviders.some(function(p){return p.info.uuid===d.info.uuid;})) eipProviders.push({info:d.info,provider:d.provider}); }
 window.addEventListener('eip6963:announceProvider',function(e){ _addProvider(e.detail); });
 try{ window.dispatchEvent(new Event('eip6963:requestProvider')); }catch(e){}
 
@@ -223,10 +224,11 @@ var KNOWN_WALLETS=[
 ];
 function findProvider(w){ return eipProviders.filter(function(p){ var r=(p.info.rdns||'').toLowerCase(), n=(p.info.name||'').toLowerCase(); return r===w.rdns || n.indexOf(w.match)>=0; })[0]||null; }
 function connectWallet(){ openWalletPicker(); }
-function walletIcon(p){ return (p&&p.info.icon)?'<img src="'+p.info.icon+'" alt="" style="width:28px;height:28px;border-radius:7px;flex-shrink:0">':'<span style="font-size:1.5rem;width:28px;text-align:center;flex-shrink:0">👛</span>'; }
+function walletIcon(p){ return (p&&p.info.icon)?'<img src="'+esc(String(p.info.icon))+'" alt="" style="width:28px;height:28px;border-radius:7px;flex-shrink:0">':'<span style="font-size:1.5rem;width:28px;text-align:center;flex-shrink:0">👛</span>'; }
 function _dot(){ return '<span style="font-size:.72rem;font-weight:700;color:#12c07a;background:rgba(18,192,122,.13);padding:3px 9px;border-radius:999px">Detected</span>'; }
 function _hoverOn(el){ el.style.borderColor='var(--accent)'; }
 function openWalletPicker(){
+  injectedAttempt++;cancelWalletConnect();
   try{ window.dispatchEvent(new Event('eip6963:requestProvider')); }catch(e){}
   var rows=[], used={};
   var rs='display:flex;align-items:center;gap:12px;padding:13px 14px;border:1px solid var(--border);border-radius:11px;margin-bottom:9px;text-decoration:none;color:inherit';
@@ -254,7 +256,7 @@ function openWalletPicker(){
 // Extensions don't exist on phones, so this is a separate path: bridges to a wallet APP over
 // WalletConnect's relay instead of an injected provider. Scripts are large (WC core + QR
 // renderer), so load them lazily on first use rather than on every landing-page visit.
-var wcScriptsPromise = null, wcProvider = null;
+var wcScriptsPromise = null, wcProvider = null, wcAttempt = 0;
 function loadScript(src){
   return new Promise(function(resolve,reject){
     var s=document.createElement('script'); s.src=src;
@@ -263,59 +265,56 @@ function loadScript(src){
   });
 }
 function loadWcScripts(){
-  if(!wcScriptsPromise) wcScriptsPromise = Promise.all([loadScript('/vendor/wc-ethereum-provider.bundle.js'), loadScript('/vendor/qrcode.bundle.js')]);
+  if(!wcScriptsPromise) wcScriptsPromise = Promise.all([loadScript('/vendor/wc-ethereum-provider.bundle.js?v=38beb613f13ac8d3a2831ee403334f84574eb5cfd3b6bb917a392533b2733514'), loadScript('/vendor/qrcode.bundle.js')]);
   return wcScriptsPromise;
 }
 function isMobileUA(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||''); }
 async function connectWalletConnect(){
+  cancelWalletConnect();
+  var attempt=++wcAttempt;
   closeWalletPicker();
-  document.getElementById('wcStatus').textContent = 'Loading…';
-  document.getElementById('wcQrWrap').innerHTML = '';
-  document.getElementById('wcOpenAppBtn').style.display = 'none';
+  document.getElementById('wcStatus').textContent='Loading…';
+  document.getElementById('wcQrWrap').innerHTML='';
+  document.getElementById('wcOpenAppBtn').style.display='none';
   document.getElementById('wcModal').classList.add('open');
   try{
-    await loadWcScripts();
-    wcProvider = await window.WCEthereumProvider.init({
-      projectId: WC_PROJECT_ID, chains: [1], showQrModal: false,
-      metadata: { name: 'OGT Portal', description: 'DDG and OGTriple collection tracker', url: location.origin, icons: [] }
+    await loadWcScripts();if(attempt!==wcAttempt)return;
+    var provider=await window.WCEthereumProvider.init({projectId:WC_PROJECT_ID,chains:[1],methods:['eth_accounts'],optionalMethods:[],optionalChains:[],showQrModal:false,telemetryEnabled:false,metadata:{name:'OGT Portal',description:'DDG and OGTriple collection tracker',url:location.origin,icons:[]}});
+    if(attempt!==wcAttempt){await provider.disconnect();return;}wcProvider=provider;
+    provider.on('display_uri',function(uri){
+      if(attempt!==wcAttempt)return;
+      document.getElementById('wcStatus').textContent='Scan with your wallet app:';
+      window.QRCodeLib.toDataURL(uri,{width:220,margin:1}).then(function(dataUrl){if(attempt!==wcAttempt || !/^data:image\/png;base64,/.test(dataUrl))return;var img=document.createElement('img');img.src=dataUrl;img.width=220;img.height=220;img.alt='WalletConnect QR code';document.getElementById('wcQrWrap').replaceChildren(img);});
+      if(isMobileUA()){var btn=document.getElementById('wcOpenAppBtn');btn.href=uri;btn.style.display='inline-block';}
     });
-    wcProvider.on('display_uri', function(uri){
-      document.getElementById('wcStatus').textContent = 'Scan with your wallet app\'s QR scanner:';
-      window.QRCodeLib.toDataURL(uri, {width:220,margin:1}).then(function(dataUrl){
-        document.getElementById('wcQrWrap').innerHTML = '<img src="'+dataUrl+'" width="220" height="220" alt="WalletConnect QR code" style="border-radius:10px">';
-      });
-      if(isMobileUA()){
-        var btn=document.getElementById('wcOpenAppBtn');
-        btn.href = uri; btn.style.display='inline-block';
-      }
-    });
-    await wcProvider.connect();
-    var accts = wcProvider.accounts || (await wcProvider.request({method:'eth_accounts'}));
-    if(accts && accts[0]){ connected=accts[0]; selectedProvider=wcProvider; showConnected(); closeWcModal(); }
-    else { document.getElementById('wcStatus').textContent = 'No account returned — try again.'; }
-  }catch(e){
-    document.getElementById('wcStatus').textContent = (e && e.message) ? e.message : 'Connection failed or was cancelled.';
-  }
+    await provider.connect();if(attempt!==wcAttempt){await provider.disconnect();return;}
+    var accts=provider.accounts || await provider.request({method:'eth_accounts'});if(attempt!==wcAttempt){await provider.disconnect();return;}
+    if(accts&&isAddr(accts[0])){connected=accts[0];selectedProvider=provider;showConnected();closeWcModal();}
+    else document.getElementById('wcStatus').textContent='No account returned — try again.';
+  }catch(e){if(attempt===wcAttempt)document.getElementById('wcStatus').textContent='Connection failed or was cancelled.';}
 }
 function closeWcModal(){ var m=document.getElementById('wcModal'); if(m) m.classList.remove('open'); }
-function cancelWalletConnect(){ closeWcModal(); if(wcProvider){ try{ wcProvider.disconnect(); }catch(e){} wcProvider=null; } }
-function closeWalletPicker(){ var m=document.getElementById('walletPicker'); if(m)m.classList.remove('open'); }
+function cancelWalletConnect(){wcAttempt++;closeWcModal();var provider=wcProvider;wcProvider=null;if(provider)Promise.resolve(provider.disconnect()).catch(function(){});}
+function closeWalletPicker(){ injectedAttempt++;var m=document.getElementById('walletPicker'); if(m)m.classList.remove('open'); }
 function doConnectByUuid(u){ var p=eipProviders.filter(function(x){return x.info.uuid===u;})[0]; if(p) doConnect(p.provider,p.info.name); }
 async function doConnect(provider,name){
+  cancelWalletConnect();var attempt=++injectedAttempt;
   try{
-    try{ await provider.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]}); }catch(pe){ if(pe&&pe.code===4001) return; }
-    var accts=await provider.request({method:'eth_requestAccounts'});
-    if(accts&&accts[0]){ connected=accts[0]; selectedProvider=provider; showConnected(); closeWalletPicker(); }
-  }catch(e){ /* rejected */ }
+    try{await provider.request({method:'wallet_requestPermissions',params:[{eth_accounts:{}}]});}catch(pe){if(pe&&pe.code===4001)return;}
+    if(attempt!==injectedAttempt)return;
+    var accounts=await provider.request({method:'eth_requestAccounts'});if(attempt!==injectedAttempt)return;
+    if(accounts&&isAddr(accounts[0])){connected=accounts[0];selectedProvider=provider;var match=eipProviders.find(function(p){return p.provider===provider;});if(match)try{sessionStorage.setItem('ogt_provider_uuid',match.info.uuid);}catch(_){}showConnected();closeWalletPicker();}
+  }catch(_){ /* rejected */ }
 }
-function disconnectWallet(){ connected=null; try{ localStorage.removeItem('rk_wallet'); }catch(e){} showConnected(); }
+function disconnectWallet(){injectedAttempt++;connected=null;var provider=selectedProvider;selectedProvider=null;cancelWalletConnect();if(provider)Promise.resolve(provider.disconnect?.()).catch(function(){});try{localStorage.removeItem('rk_wallet');}catch(e){}showConnected();fetch('/api/siwe/logout',{method:'POST'}).then(function(r){if(r.ok)siweAddr=null;}).catch(function(){});}
 function toggleConnect(){ if(connected){ disconnectWallet(); } else { connectWallet(); } }
 function showConnected(){
   var st=document.getElementById('connState'), btn=document.getElementById('connectBtn');
   if(connected){ st.textContent='● '+shortAddr(connected)+' connected'; btn.textContent='Disconnect'; btn.title='Disconnect / switch wallet'; try{ localStorage.setItem('rk_wallet', connected); }catch(e){} }
   else { st.textContent=''; btn.textContent='Connect Wallet'; btn.title='Connect a wallet'; }
 }
-(function restore(){ try{ var w=localStorage.getItem('rk_wallet'); if(isAddr(w)){ connected=w; showConnected(); } }catch(e){} })();
+// A saved public address is not proof of a currently connected wallet.
+
 var siweAddr=null;
 (async function detectSiwe(){ try{ var me=await (await fetch('/api/siwe/me')).json(); if(me&&me.address){ siweAddr=me.address; var st=document.getElementById('connState'); if(st) st.textContent='● '+shortAddr(siweAddr)+' signed in'; } }catch(e){} })();
 function siweLogout(){ fetch('/api/siwe/logout',{method:'POST'}).then(function(){ siweAddr=null; location.reload(); }); }

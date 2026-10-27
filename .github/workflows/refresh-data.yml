@@ -39,7 +39,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm ci --ignore-scripts
 
       - name: Verify secrets are present
         run: |
@@ -67,9 +67,12 @@ jobs:
 
       - name: Full contract-direct bake (manual runs only)
         if: ${{ github.event.inputs.bake_slug != '' }}
+        env:
+          BAKE_SLUG: ${{ github.event.inputs.bake_slug }}
         run: |
           set -e
-          slug='${{ github.event.inputs.bake_slug }}'
+          case "$BAKE_SLUG" in gorgez|ogtcertification) ;; *) echo '::error::Unsupported collection'; exit 1 ;; esac
+          slug="$BAKE_SLUG"
           echo "baking $slug from the contract"
           node scripts/bake-onchain.js "$slug"
           if [ "$slug" = "gorgez" ]; then
@@ -98,12 +101,15 @@ jobs:
 
       - name: Summary
         if: always()
+        env:
+          BAKE_SLUG: ${{ github.event.inputs.bake_slug }}
+          TRIGGER: ${{ github.event_name }}
         run: |
           {
             echo "### Titan data refresh"
             echo ""
-            echo "- trigger: \`${{ github.event_name }}\`"
-            echo "- bake requested: \`${{ github.event.inputs.bake_slug || 'none (market refresh only)' }}\`"
+            printf -- '- trigger: %s\n' "$TRIGGER"
+            printf -- '- bake requested: %s\n' "${BAKE_SLUG:-none (market refresh only)}"
             echo "- changed files:"
             echo ""
             echo '```'

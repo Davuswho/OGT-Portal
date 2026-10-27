@@ -11,20 +11,25 @@ const { fetchNft } = require('../lib/opensea');
 const { walletNfts, walletIds } = require('../lib/holdings');
 const { isDonor } = require('../lib/access');
 const siwe = require('../lib/siwe');
-const { esc, isAddr, isSlug, send, json } = require('../lib/util');
+const { esc, safeJson, isAddr, isSlug, send, json } = require('../lib/util');
 
 const OWNER = (process.env.OWNER_WALLET || '').toLowerCase().trim();
 
 // Lightweight per-IP rate limit. These routes call OpenSea with OUR key on behalf of any visitor,
 // so an unbounded caller could exhaust the quota / run up cost. In-memory = per warm instance
 // (best-effort on serverless; meaningful against casual abuse). 40 req/min/IP.
-var _RL = {};
-function clientIp(req) { return ((req.headers['x-forwarded-for'] || '').split(',')[0].trim()) || (req.socket && req.socket.remoteAddress) || 'unknown'; }
-function rateLimited(req) {
-  var ip = clientIp(req), now = Date.now(), WINDOW = 60000, MAX = 100;
-  var e = _RL[ip];
-  if (!e || now - e.t > WINDOW) { _RL[ip] = { n: 1, t: now }; return false; }
-  e.n++; return e.n > MAX;
+const { isIP } = require('node:net');
+var _RL = new Map();
+function clientIp(req) {
+  var value=process.env.VERCEL==='1'?req.headers['x-vercel-forwarded-for']:(req.socket&&req.socket.remoteAddress);
+  return typeof value==='string' && isIP(value.trim()) ? value.trim() : 'unattributed';
+}
+function rateLimited(req,cost) {
+  var ip=clientIp(req),now=Date.now(),WINDOW=60000,MAX=40;cost=cost||1;
+  for(var [key,value] of _RL)if(now-value.t>WINDOW)_RL.delete(key);
+  var e=_RL.get(ip);
+  if(!e){if(_RL.size>=5000)return true;e={n:0,t:now};_RL.set(ip,e);}
+  e.n+=cost;return e.n>MAX;
 }
 
 function errorPage(res, code, title, msg) {
@@ -34,35 +39,46 @@ function errorPage(res, code, title, msg) {
 // ---- landing page (collection picker) ------------------------------------
 var LANDING_TPL = null;
 var VENDOR_FILES = { '/vendor/wc-ethereum-provider.bundle.js': 'wc-ethereum-provider.bundle.js', '/vendor/qrcode.bundle.js': 'qrcode.bundle.js' };
-var VENDOR_CACHE = {};
+var VENDOR_CACHE = Object.create(null);
 function landingHTML() {
   if (LANDING_TPL == null) { try { LANDING_TPL = fs.readFileSync(path.join(__dirname, '..', 'public', 'landing.html'), 'utf8'); } catch (e) { LANDING_TPL = '<h1>landing missing</h1>'; } }
   var cols = registry.all().map(function (c) {
     var b = c.branding || {};
     return { slug: c.slug, name: b.name || c.name, emoji: b.emoji || '', tagline: b.tagline || '', colors: b.colors || null, supply: c.supply, logo: b.logo || '', ready: c.ready !== false };
   });
-  return LANDING_TPL
-    .replace('__COLLECTIONS__', function () { return JSON.stringify(cols); })
-    .replace('__OWNER__', function () { return JSON.stringify(OWNER || ''); })
-    .replace('__WC_PROJECT_ID__', function () { return JSON.stringify((process.env.WALLETCONNECT_PROJECT_ID || '').trim()); });
+  var bindings = {COLLECTIONS:safeJson(cols),OWNER:safeJson(OWNER || ''),WC_PROJECT_ID:safeJson((process.env.WALLETCONNECT_PROJECT_ID || '').trim())};
+  return LANDING_TPL.replace(/__([A-Z_]+)__/g, function(token,key) { return Object.hasOwn(bindings,key)?bindings[key]:token; });
 }
 
 // Parse comma-separated addr[:alias] pairs (GA multi-wallet URL format).
 function parseWallets(str) {
-  return String(str || '').split(',').map(function (part) {
-    var seg = part.trim().split(':');
-    var addr = seg[0].toLowerCase();
-    var alias = seg[1] ? decodeURIComponent(seg[1]).replace(/[<>&"]/g, '').trim() : null;
-    if (alias && alias.length > 20) alias = alias.slice(0, 20);
-    if (!alias) alias = addr.slice(0, 6) + '…' + addr.slice(-4);
-    return { addr: addr, alias: alias };
-  }).filter(function (e) { return isAddr(e.addr); });
+  str = String(str || '');
+  if (str.length > 2048) throw Object.assign(new Error('Wallet query is too long.'), { status: 400 });
+  var unique = new Map();
+  for (var part of str.split(',')) {
+    var seg = part.trim().split(':'), addr = seg[0].toLowerCase();
+    if (!isAddr(addr)) continue;
+    var alias = seg[1] || '';
+    try { alias = decodeURIComponent(alias); } catch (_) { throw Object.assign(new Error('Malformed wallet alias.'), { status: 400 }); }
+    alias = alias.trim().slice(0, 20) || addr.slice(0, 6) + '…' + addr.slice(-4);
+    if (!unique.has(addr)) unique.set(addr, { addr: addr, alias: alias });
+    if (unique.size > 6) throw Object.assign(new Error('At most 6 unique wallets are supported.'), { status: 400 });
+  }
+  return Array.from(unique.values());
+}
+async function fetchWalletRows(cfg, wallets) {
+  var out = new Array(wallets.length), cursor = 0;
+  await Promise.all(Array.from({ length: Math.min(2, wallets.length) }, async function () {
+    while (cursor < wallets.length) {
+      var wi = cursor++, w = wallets[wi], nfts = await walletNfts(cfg, w.addr);
+      out[wi] = { wallet: w, walletIdx: wi, nfts: nfts, count: nfts.length };
+    }
+  }));
+  return out;
 }
 
 async function holdingsFor(cfg, st, wallets) {
-  var results = await Promise.all(wallets.map(function (w, wi) {
-    return walletNfts(cfg, w.addr).then(function (nfts) { return { wallet: w, walletIdx: wi, nfts: nfts, count: nfts.length }; });
-  }));
+  var results = await fetchWalletRows(cfg, wallets);
   var holdings = [];
   results.forEach(function (r) {
     r.nfts.forEach(function (n) {
@@ -84,9 +100,7 @@ function liteState(cfg) {
 // simply return no traits — the dashboard then shows tokens + art with nothing to rank.
 async function liteHoldings(cfg, wallets) {
   var ENRICH_CAP = 60;
-  var results = await Promise.all(wallets.map(function (w, wi) {
-    return walletNfts(cfg, w.addr).then(function (nfts) { return { wallet: w, walletIdx: wi, nfts: nfts, count: nfts.length }; });
-  }));
+  var results = await fetchWalletRows(cfg, wallets);
   var flat = [];
   results.forEach(function (r) { r.nfts.forEach(function (n) {
     // Alchemy already returns traits ([[type,value]]) → use them and skip the per-token OpenSea call.
@@ -111,20 +125,21 @@ async function liteHoldings(cfg, wallets) {
 function qparam(qs, name) { return (qs.match(new RegExp('(?:^|&)' + name + '=([^&]+)')) || [])[1]; }
 
 // ---- SIWE session helpers ----
-function readBody(req) { return new Promise(function (resolve) { var b = ''; req.on('data', function (c) { b += c; if (b.length > 20000) { b = ''; req.destroy(); } }); req.on('end', function () { resolve(b); }); req.on('error', function () { resolve(''); }); }); }
-function parseCookies(req) { var out = {}; (req.headers.cookie || '').split(';').forEach(function (p) { var i = p.indexOf('='); if (i > 0) out[p.slice(0, i).trim()] = decodeURIComponent(p.slice(i + 1).trim()); }); return out; }
-function isSecure(req) { return req.headers['x-forwarded-proto'] === 'https' || /vercel\.app$/.test(req.headers.host || ''); }
+function readBody(req) { return new Promise(function (resolve, reject) { var chunks=[], size=0, failed=false; req.on('data', function(c){ size+=Buffer.byteLength(c); if(size>12000){failed=true;chunks=[];} else if(!failed)chunks.push(Buffer.from(c)); }); req.on('end', function(){if(failed)return reject(new Error('Request is too large.'));resolve(Buffer.concat(chunks).toString('utf8'));}); req.on('error', reject); }); }
+function parseCookies(req) { var out=Object.create(null); String(req.headers.cookie||'').split(';').forEach(function(p){var i=p.indexOf('=');if(i>0){try{out[p.slice(0,i).trim()]=decodeURIComponent(p.slice(i+1).trim());}catch(_){}}});return out; }
+
+function isSecure(req) { try { return new URL(siwe.origin()).protocol === 'https:'; } catch (_) { return true; } }
 function setCookie(res, name, val, maxAge, req) {
   var c = name + '=' + encodeURIComponent(val) + '; Path=/; HttpOnly; SameSite=Lax; Max-Age=' + maxAge;
   if (isSecure(req)) c += '; Secure';
   var prev = res.getHeader('Set-Cookie');
   res.setHeader('Set-Cookie', prev ? [].concat(prev, c) : c);
 }
-function authedAddr(req) { var t = siwe.readToken(parseCookies(req).siwe); return (t && t.addr) ? t.addr : null; }
-function sessionPayload(req) { return siwe.readToken(parseCookies(req).siwe); }
+async function authedAddr(req) { var t = await sessionPayload(req); return (t && t.addr) ? t.addr : null; }
+async function sessionPayload(req) { try { return await siwe.readSession(parseCookies(req).siwe); } catch (_) { return null; } }
 // The signed-in user's wallet set: primary ("You") + linked view-only wallets.
-function sessionWallets(req) {
-  var t = sessionPayload(req);
+async function sessionWallets(req) {
+  var t = await sessionPayload(req);
   if (!t || !t.addr) return [];
   var out = [{ addr: t.addr, alias: 'You' }];
   (t.linked || []).forEach(function (a) { a = String(a).toLowerCase(); if (isAddr(a) && a !== t.addr) out.push({ addr: a, alias: a.slice(0, 6) + '…' + a.slice(-4) }); });
@@ -132,7 +147,7 @@ function sessionWallets(req) {
 }
 
 module.exports = async function handler(req, res) {
-  var url = decodeURIComponent((req.url || '/').split('?')[0]);
+  var url; try { url = decodeURIComponent((req.url || '/').split('?')[0]); } catch (_) { return send(res, 400, 'text/plain', 'Malformed URL'); }
   var qs = (req.url || '').split('?')[1] || '';
 
   if (url === '/' || url === '') return send(res, 200, 'text/html', landingHTML());
@@ -142,7 +157,7 @@ module.exports = async function handler(req, res) {
   if (VENDOR_FILES[url]) {
     if (VENDOR_CACHE[url] == null) { try { VENDOR_CACHE[url] = fs.readFileSync(path.join(__dirname, '..', 'public', 'vendor', VENDOR_FILES[url])); } catch (e) { VENDOR_CACHE[url] = ''; } }
     if (!VENDOR_CACHE[url]) return send(res, 404, 'text/plain', 'not found');
-    return send(res, 200, 'application/javascript; charset=utf-8', VENDOR_CACHE[url], { 'Cache-Control': 'public, max-age=31536000, immutable' });
+    return send(res, 200, 'application/javascript; charset=utf-8', VENDOR_CACHE[url], { 'Cache-Control': 'public, max-age=0, must-revalidate' });
   }
   if (url !== '/' && rateLimited(req)) return send(res, 429, 'text/plain; charset=utf-8', 'Too many requests — please slow down a moment.');
 
@@ -150,56 +165,45 @@ module.exports = async function handler(req, res) {
     return json(res, { collections: registry.all().map(function (c) { return { slug: c.slug, name: c.name, emoji: (c.branding || {}).emoji || '', supply: c.supply, curated: !!c.curated }; }) });
   }
 
-  // ---- Sign-In With Ethereum (gasless signature → session cookie) ----
-  if (url === '/api/siwe/nonce') {
-    var nonce = siwe.randomNonce();
-    setCookie(res, 'siwe_nonce', siwe.makeToken({ n: nonce }, 600), 600, req);
-    return json(res, { nonce: nonce });
-  }
-  if (url === '/api/siwe/verify') {
-    var raw = await readBody(req); var body2; try { body2 = JSON.parse(raw || '{}'); } catch (e) { body2 = {}; }
-    if (!body2.message || !body2.signature) return json(res, { ok: false, error: 'missing fields' });
-    var recovered = siwe.recover(body2.message, body2.signature);
-    if (!recovered) return json(res, { ok: false, error: 'bad signature' });
-    var pm = siwe.parseMessage(body2.message);
-    if (!pm.address || pm.address !== recovered) return json(res, { ok: false, error: 'address mismatch' });
-    if (pm.domain && pm.domain !== (req.headers.host || '')) return json(res, { ok: false, error: 'bad domain' });
-    var nt = siwe.readToken(parseCookies(req).siwe_nonce);
-    if (!nt || !pm.nonce || nt.n !== pm.nonce) return json(res, { ok: false, error: 'bad or expired nonce' });
-    setCookie(res, 'siwe_nonce', '', 0, req);
-    var prevS = sessionPayload(req);
-    var keepLinked = (prevS && prevS.addr === recovered && prevS.linked) ? prevS.linked : [];   // keep links if re-signing same wallet
-    setCookie(res, 'siwe', siwe.makeToken({ addr: recovered, linked: keepLinked }, 7 * 86400), 7 * 86400, req);
-    return json(res, { ok: true, address: recovered, donor: isDonor(recovered) });
-  }
-  if (url === '/api/siwe/me') { var me = authedAddr(req); return json(res, { address: me, donor: me ? isDonor(me) : false }); }
-  if (url === '/api/siwe/logout') { setCookie(res, 'siwe', '', 0, req); return json(res, { ok: true }); }
-
-  // ---- Linked wallets (signed-in users attach view-only addresses) ----
-  if (url === '/api/wallets') {
-    var sw = sessionPayload(req);
-    return json(res, sw && sw.addr ? { primary: sw.addr, linked: sw.linked || [] } : { primary: null, linked: [] });
-  }
-  if (url === '/api/wallets/link') {
-    var s2 = sessionPayload(req); if (!s2 || !s2.addr) return json(res, { ok: false, error: 'not signed in' });
-    var rb2 = await readBody(req); var bd2; try { bd2 = JSON.parse(rb2 || '{}'); } catch (e) { bd2 = {}; }
-    var addr2 = String(bd2.address || '').toLowerCase();
-    if (!isAddr(addr2)) return json(res, { ok: false, error: 'invalid address' });
-    var linked2 = (s2.linked || []).slice();
-    if (addr2 !== s2.addr && linked2.indexOf(addr2) < 0) {
-      if (linked2.length >= 10) return json(res, { ok: false, error: 'max 10 linked wallets' });
-      linked2.push(addr2);
-    }
-    setCookie(res, 'siwe', siwe.makeToken({ addr: s2.addr, linked: linked2 }, 7 * 86400), 7 * 86400, req);
-    return json(res, { ok: true, primary: s2.addr, linked: linked2 });
-  }
-  if (url === '/api/wallets/unlink') {
-    var s3 = sessionPayload(req); if (!s3 || !s3.addr) return json(res, { ok: false, error: 'not signed in' });
-    var rb3 = await readBody(req); var bd3; try { bd3 = JSON.parse(rb3 || '{}'); } catch (e) { bd3 = {}; }
-    var addr3 = String(bd3.address || '').toLowerCase();
-    var linked3 = (s3.linked || []).filter(function (a) { return a !== addr3; });
-    setCookie(res, 'siwe', siwe.makeToken({ addr: s3.addr, linked: linked3 }, 7 * 86400), 7 * 86400, req);
-    return json(res, { ok: true, primary: s3.addr, linked: linked3 });
+  // Authentication is disabled unless a strong secret, exact origin and shared storage are configured.
+  if (url.startsWith('/api/siwe/') || url.startsWith('/api/wallets')) {
+    res.setHeader('Cache-Control','no-store');
+    if (url === '/api/siwe/me' && req.method === 'GET') { var me = await authedAddr(req); return json(res,{address:me,donor:me?isDonor(me):false,signInAvailable:siwe.configured()}); }
+    if (url === '/api/wallets' && req.method === 'GET') { var current = await sessionPayload(req); return json(res,current?{primary:current.addr,linked:current.linked}:{primary:null,linked:[]}); }
+    if (!siwe.configured()) return send(res,503,'application/json',JSON.stringify({ok:false,error:'Private sign-in is not configured.'}));
+    const needsJson = ['/api/siwe/nonce','/api/siwe/verify','/api/siwe/cancel','/api/wallets/link','/api/wallets/unlink'].includes(url);
+    if (!siwe.requestAllowed(req,'POST',needsJson)) return send(res,403,'application/json',JSON.stringify({ok:false,error:'This action requires a same-origin POST.'}));
+    try {
+      if (url === '/api/siwe/logout') { await siwe.cancelChallenge(parseCookies(req).siwe_nonce); await siwe.logout(parseCookies(req).siwe); setCookie(res,'siwe','',0,req);setCookie(res,'siwe_nonce','',0,req);return json(res,{ok:true}); }
+      const body = needsJson ? JSON.parse(await readBody(req)) : {};
+      if (url === '/api/siwe/cancel') {
+        const ok=await siwe.cancelChallenge(body.cancelToken);
+        return send(res,ok?200:400,'application/json',JSON.stringify({ok}));
+      }
+      if (url === '/api/siwe/nonce') {
+        const challenge = await siwe.createChallenge(body.address);
+        setCookie(res,'siwe_nonce',challenge.cookie,300,req);
+        return json(res,{nonce:challenge.nonce,message:challenge.message,cancelToken:challenge.cancelToken});
+      }
+      if (url === '/api/siwe/verify') {
+        const recovered = await siwe.verifyChallenge(parseCookies(req).siwe_nonce,body.message,body.signature);
+        if (!recovered) return send(res,401,'application/json',JSON.stringify({ok:false,error:'Invalid or already-used sign-in challenge.'}));
+        await siwe.logout(parseCookies(req).siwe);
+        setCookie(res,'siwe_nonce','',0,req);
+        setCookie(res,'siwe',await siwe.createSession(recovered,siwe.parseMessage(body.message).nonce,siwe.parseMessage(body.message).expires),siwe.SESSION_TTL,req);
+        return json(res,{ok:true,address:recovered,donor:isDonor(recovered)});
+      }
+      if (url === '/api/wallets/link' || url === '/api/wallets/unlink') {
+        const session = await sessionPayload(req); if (!session) return send(res,401,'application/json',JSON.stringify({ok:false,error:'Not signed in.'}));
+        const address = String(body.address||'').toLowerCase(); if (!isAddr(address)) return send(res,400,'application/json',JSON.stringify({ok:false,error:'Invalid address.'}));
+        let linked = session.linked.filter(a=>a!==address);
+        if (url === '/api/wallets/link' && address !== session.addr) linked.push(address);
+        if (linked.length > 5) return send(res,400,'application/json',JSON.stringify({ok:false,error:'At most 6 wallets including your primary.'}));
+        if (!await siwe.updateLinked(session,linked)) return send(res,401,'application/json',JSON.stringify({ok:false,error:'Session expired.'}));
+        return json(res,{ok:true,primary:session.addr,linked});
+      }
+      return send(res,404,'application/json',JSON.stringify({ok:false,error:'Not found.'}));
+    } catch (_) { return send(res,400,'application/json',JSON.stringify({ok:false,error:'Sign-in request could not be completed. Please retry.'})); }
   }
 
   // Collection dashboard: /c/:slug  or  /c/:slug/:wallets
@@ -207,7 +211,7 @@ module.exports = async function handler(req, res) {
   if (cmatch) {
     var slug = cmatch[1].toLowerCase();
     if (!isSlug(slug)) return errorPage(res, 400, 'Bad collection', 'Invalid slug.');
-    var wallets = cmatch[2] ? parseWallets(cmatch[2]) : sessionWallets(req);   // signed-in → primary + linked wallets
+    var wallets; try { wallets = cmatch[2] ? parseWallets(cmatch[2]) : await sessionWallets(req); } catch (e) { return errorPage(res, 400, 'Invalid wallets', e.message); }   // signed-in → primary + linked wallets
     try {
       var cfg = registry.load(slug), lite = false;
       if (!cfg) { cfg = await registry.resolveDynamic(slug); lite = true; }   // add-any-collection: resolve via OpenSea
@@ -218,13 +222,14 @@ module.exports = async function handler(req, res) {
       if (!lite) { try { await data.refreshMarket(st); } catch (e) { } }
       var holdings = [], walletsMeta = null, walletLabel = 'Browse';
       if (wallets.length) {
+        if(rateLimited(req,wallets.length))return send(res,429,'text/plain','Wallet lookup limit reached. Please retry later.');
         var hf = lite ? await liteHoldings(cfg, wallets) : await holdingsFor(cfg, st, wallets);
         holdings = hf.holdings;
         walletLabel = wallets.map(function (w) { return w.alias; }).join(' + ');
         walletsMeta = wallets.length > 1 ? wallets.map(function (w, i) { return { alias: w.alias, count: hf.results[i].count }; }) : null;
       }
       var completion = (!lite && wallets.length) ? data.buildCompletion(st, holdings, data.currentMarket(st), data.currentAsOf(st)) : null;
-      var authed = authedAddr(req);
+      var authed = await authedAddr(req);
       var access = authed ? isDonor(authed) : false;   // gate keys on the SIGNED-IN (SIWE) wallet — un-bypassable
       var html = buildDashboardHTML(st, holdings, { walletLabel: walletLabel, completion: completion, wallets: walletsMeta, access: access });
       return send(res, 200, 'text/html', html, { 'Cache-Control': 'no-store' });
@@ -237,8 +242,9 @@ module.exports = async function handler(req, res) {
     if (!sp || !isSlug(sp)) return json(res, { error: 'bad slug' });
     var cfgH = registry.load(sp); if (!cfgH) return json(res, { error: 'unknown collection' });
     var stH = data.loaded(cfgH);
-    var ws = parseWallets(decodeURIComponent(wp || ''));
+    var ws; try { ws = parseWallets(decodeURIComponent(wp || '')); } catch (e) { return send(res, 400, 'application/json', JSON.stringify({ error: e.message })); }
     if (!ws.length) return json(res, { error: 'no wallet' });
+    if(rateLimited(req,ws.length))return send(res,429,'application/json',JSON.stringify({error:'Wallet lookup limit reached.'}));
     try {
       var hfH = await holdingsFor(cfgH, stH, ws);
       var comp = data.buildCompletion(stH, hfH.holdings, data.currentMarket(stH), data.currentAsOf(stH));

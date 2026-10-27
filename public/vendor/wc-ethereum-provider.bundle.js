@@ -16463,6 +16463,14 @@ if (cid) {
 
   // node_modules/@walletconnect/universal-provider/node_modules/@walletconnect/utils/dist/index.js
   var import_blakejs = __toESM(require_blakejs(), 1);
+  function __ogtIsTelegramHttpsLink(value) {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && url.hostname === "t.me" && url.port === "" && !url.username && !url.password;
+    } catch (_3) {
+      return false;
+    }
+  }
   var Y2 = ":";
   function ue2(e2) {
     const [t, n4] = e2.split(Y2);
@@ -16641,7 +16649,7 @@ if (cid) {
     const r3 = `requestId=${t}&sessionTopic=${n4}`;
     e2.endsWith("/") && (e2 = e2.slice(0, -1));
     let o5 = `${e2}`;
-    if (e2.startsWith("https://t.me")) {
+    if (__ogtIsTelegramHttpsLink(e2)) {
       const s2 = e2.includes("?") ? "&startapp=" : "?startapp=";
       o5 = `${o5}${s2}${at(r3, true)}`;
     } else o5 = `${o5}/wc?${r3}`;

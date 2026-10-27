@@ -1,10 +1,19 @@
 {
-  "builtAt": "2026-10-27T19:53:32.169Z",
+  "builtAt": "2026-10-27T20:12:26.133Z",
   "source": "scripts/wc-provider-adapter.mjs",
   "upstream": "@walletconnect/universal-provider@2.26.0",
   "output": "public/vendor/wc-ethereum-provider.bundle.js",
-  "bytes": 877196,
-  "sha256": "38beb613f13ac8d3a2831ee403334f84574eb5cfd3b6bb917a392533b2733514",
+  "bytes": 877453,
+  "sha256": "feed1bc2b63a7ad89c24f54d573ba5b71f8b35e1de97b837d93d647c6066ead0",
+  "vendorPatches": [
+    {
+      "id": "wallet-utils-telegram-origin-2026-10-27",
+      "package": "@walletconnect/utils@2.26.0",
+      "input": "dist/index.js",
+      "inputSha256": "8b4eec93c82950de354831907ed898ec678a79d1917387361f6a27ef0c10011b",
+      "patchedSourceSha256": "74fc3d7e36eb0e38d52b6d9e318a7e372732259f9dd451955fbda038b78d57d7"
+    }
+  ],
   "inputs": [
     "node_modules/@adraffy/ens-normalize/dist/index.mjs",
     "node_modules/@msgpack/msgpack/dist.esm/CachedKeyDecoder.mjs",

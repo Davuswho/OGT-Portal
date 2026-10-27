@@ -265,7 +265,7 @@ function loadScript(src){
   });
 }
 function loadWcScripts(){
-  if(!wcScriptsPromise) wcScriptsPromise = Promise.all([loadScript('/vendor/wc-ethereum-provider.bundle.js?v=38beb613f13ac8d3a2831ee403334f84574eb5cfd3b6bb917a392533b2733514'), loadScript('/vendor/qrcode.bundle.js')]);
+  if(!wcScriptsPromise) wcScriptsPromise = Promise.all([loadScript('/vendor/wc-ethereum-provider.bundle.js?v=feed1bc2b63a7ad89c24f54d573ba5b71f8b35e1de97b837d93d647c6066ead0'), loadScript('/vendor/qrcode.bundle.js')]);
   return wcScriptsPromise;
 }
 function isMobileUA(){ return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent||''); }

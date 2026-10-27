@@ -3899,7 +3899,7 @@ async function hdrWalletConnect(){
   var body=document.getElementById('hdrPickerBody');
   body.innerHTML='<div style="text-align:center;color:var(--muted);padding:14px" id="hdrWcStatus">Loading…</div><div id="hdrWcQr" style="display:flex;justify-content:center;margin-top:8px"></div><a id="hdrWcOpen" style="display:none;margin:10px auto 0;text-align:center;background:var(--accent);color:#0a0f0a;padding:8px 16px;border-radius:8px;font-weight:700;text-decoration:none;max-width:220px" href="#">Open in wallet app →</a>';
   try{
-    if(!_wcLoad) _wcLoad=Promise.all([_loadJs('/vendor/wc-ethereum-provider.bundle.js?v=38beb613f13ac8d3a2831ee403334f84574eb5cfd3b6bb917a392533b2733514'),_loadJs('/vendor/qrcode.bundle.js')]);
+    if(!_wcLoad) _wcLoad=Promise.all([_loadJs('/vendor/wc-ethereum-provider.bundle.js?v=feed1bc2b63a7ad89c24f54d573ba5b71f8b35e1de97b837d93d647c6066ead0'),_loadJs('/vendor/qrcode.bundle.js')]);
     await _wcLoad;if(attempt!==_wcEpoch)return;
     var provider=await window.WCEthereumProvider.init({ projectId:WC_PROJECT_ID, chains:[1], showQrModal:false,
       metadata:{ name:'NFT Master', description:'NFT collection trait tracker', url:location.origin, icons:[] } });
